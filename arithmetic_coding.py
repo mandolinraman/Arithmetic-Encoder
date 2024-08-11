@@ -51,7 +51,7 @@ def divmod_abc(a, b, c):
 
 
 class ArithmeticCoder:
-    def __init__(self, frequencies, register_size=16, pad=1):
+    def __init__(self, frequencies, register_size=16, pad=0):
         # assert pad >= 1
         self.delta = pad  # pad size
         self.ell = register_size  # register size
@@ -230,12 +230,14 @@ class ArithmeticCoder:
 
 # main
 
-frequencies = {"A": 126, "B": 167, "C": 116, "D": 88, "Y": 89}
+frequencies = {"A": 126, "B": 167, "C": 116, "D": 88, "Y": 89, " ": 100}
 endec = ArithmeticCoder(frequencies, 12, 0)
 
-message = "ABBYCADABBY"
-code = endec.encode(message)
-decoded_message = endec.decode(code, len(message))
+message = "ABBY CADABBY"
+encoded = endec.encode(message)
+decoded = endec.decode(encoded, len(message))
 
+code_string = "".join(str(bit) for bit in encoded)
 print(f"message = {message}")
-print(f"decoded = {decoded_message}")
+print(f"coded = {code_string}")
+print(f"decoded = {decoded}")
