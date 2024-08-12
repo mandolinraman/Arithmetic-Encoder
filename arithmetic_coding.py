@@ -1,7 +1,10 @@
+import math
+
+
 def divmod_abc(a, b, c):
     """
     Given three L-bit unsigned integers a, b, c compute:
-    
+
         q = (a * b) // c and r = (a * b) % c
 
     without overflowing using only L-bit registers for all arithmetic.
@@ -9,39 +12,41 @@ def divmod_abc(a, b, c):
     i.e., they fit in L-bit registers.
     """
 
-    k = 2  # Let k be an integer such that k * c - 1 doesn't overflow
-    qm, rm, q, r = a // c, a % c, 0, 0
+    k = 2  # Let k > 1 be an integer such that k * c - 1 doesn't overflow
+    qm, rm = divmod(a, c)
+    q, r = 0, 0
     m = b
 
     # We want to maintain the invariant:
-    #     a * b / c = (q + r / c) + m * (qm + rm / c)
+    #     a * b / c = (q + r / c) + (qm + rm / c) * m
     #     where 0 <= r, rm < c
-    while True:
-        # print(m, q, r, qm, rm)
+    while m > 0:
         # Let m = k * t + s with 0 <= s < k:
-        s = m % k
-        t = m // k
+        (t, s) = divmod(m, k)
 
         # Then,
         #     a * b = (q + r/C) + (qm + rm / c) * (k * t + s)
         #     = (q + qm * s) + (r + rm * s) / c + (qm * k + rm * k / c) * t
-        r += rm * s  # won't overflow since r + rm * s < c * k
-        q += qm * s + r // c  # won't overflow because q <= q_final
-        r = r % c
+        if s > 0:
+            r += rm * s  # won't overflow since r + rm * s < c * k
+            q += qm * s + r // c  # won't overflow because q <= q_final
+            r = r % c
 
         # At this point q and r have been modified so that we now have
         # a * b / c = (q + r / c) + (qm * k + rm * k / c) * t
-        if t == 0:
-            break  # we will eventually reach t = 0
+        if t > 0:
+            # simplify the second term
+            rm *= k  # won't overflow since rm * k < c * k
+            qm = k * qm + rm // c  # won't overflow because qm * t <= q_final
+            rm = rm % c  # won't overflow
 
-        rm *= k  # won't overflow since rm * k < c * k
-        qm = k * qm + rm // c  # won't overflow because qm * t <= q_final
-        rm = rm % c  # won't overflow
         m = t
 
         # At this point qm, rm and m have been modified so that
-        # the invariant is maintained again. Also m is now strictly
-        # smaller.
+        # we maintain the invariant:
+        #   a * b / c = (q + r / c) + (qm + rm / c) * m
+        #
+        # and m is now strictly smaller.
 
     # # debug
     # assert q == (a * b) // c
@@ -175,8 +180,10 @@ class ArithmeticCoder:
                 q += 1
                 r = span - r
 
-            qi, ri = (0, 0) if self.delta == 0 else divmod_abc(
-                self.sum_freq, self.delta, span
+            qi, ri = (
+                (0, 0)
+                if self.delta == 0
+                else divmod_abc(self.sum_freq, self.delta, span)
             )  # = (qi + ri / span)
 
             # print(low, high)
@@ -228,16 +235,23 @@ class ArithmeticCoder:
         return "".join(self.message_output)
 
 
-# main
-
+# main: example usage
 frequencies = {"A": 126, "B": 167, "C": 116, "D": 88, "Y": 89, " ": 100}
-endec = ArithmeticCoder(frequencies, 12, 0)
+endec = ArithmeticCoder(frequencies, register_size=12)
 
 message = "ABBY CADABBY"
 encoded = endec.encode(message)
 decoded = endec.decode(encoded, len(message))
 
-code_string = "".join(str(bit) for bit in encoded)
-print(f"message = {message}")
-print(f"coded = {code_string}")
-print(f"decoded = {decoded}")
+# encode and decode message
+encoded_string = "".join(str(bit) for bit in encoded)
+entropy = len(message) * math.log2(sum(frequencies.values())) - sum(
+    math.log2(frequencies[c]) for c in message
+)
+
+# print info
+print(f"Message string = {message}")
+print(f"Encoded string = {encoded_string}")
+print(f"Entropy of msg = {entropy:.2f} bits")
+print(f"Encoded length = {len(encoded)} bits")
+print(f"Decoded string = {decoded}")
