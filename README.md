@@ -6,6 +6,6 @@ This is a Python implementation of the non-adaptive arithmetic encoding/decoding
 
 This implementation differs from the paper in the following ways:
 
-- We use an $L$-bit register size to hold the code-value. All arithmetic operations use only $L$-bit registers unlike the paper that uses $2L$ bit registers to hold intermediate results of multiplications. All multiplications and divisions are done without overflow using only $L$ bit registers.
+- We use an $L$-bit register size to hold the code-value. All arithmetic operations use only $(L+1)$-bit registers unlike the paper that uses $2L$ bit registers to hold intermediate results of multiplications. All multiplications and divisions are done without overflow using only $L$ bit registers.
 - Uses a slightly faster way to find which sub-interval contains the code-value in the decoder.
 - A way to handle symbol probabilities that are smaller than $2^{-L}$ by using an optional "padding" around sub-intervals.

@@ -3,16 +3,21 @@ import math
 
 def divmod_abc(a, b, c):
     """
-    Given three L-bit unsigned integers a, b, c compute:
+    Given three unsigned integers a, b, c such that a, b amd 2*c - 1 fit in
+    L-bit registers, compute:
 
         q = (a * b) // c and r = (a * b) % c
 
     without overflowing using only L-bit registers for all arithmetic.
-    The only requirement is that (2 * c - 1) and q do not overflow
-    i.e., they fit in L-bit registers.
     """
 
-    k = 2  # Let k > 1 be an integer such that k * c - 1 doesn't overflow
+    # It's slightly more efficient if b < a
+    if a < b:
+        return divmod_abc(b, a, c)
+
+    # Let k > 1 be an integer such that k * c - 1 doesn't overflow. We
+    # choose k = 2 which requires that 2 * c -1 is an L-bit value
+    k = 2
     qm, rm = divmod(a, c)
     q, r = 0, 0
     m = b
@@ -59,7 +64,7 @@ class ArithmeticCoder:
     def __init__(self, frequencies, register_size=16, pad=0):
         # assert pad >= 1
         self.delta = pad  # pad size
-        self.ell = register_size  # register size
+        self.ell = register_size  # register size "L"
         self.num = len(frequencies)  # number of symbols
 
         # compute cmf table
@@ -98,15 +103,18 @@ class ArithmeticCoder:
         quarter = 1 << (self.ell - 2)
         three_quarters = half + quarter
 
+        # low and hight are always L-bit values
         low = 0
-        high = half + (half - 1)
+        high = 2 * half - 1
         self.code_output = []
 
         # process each symbol in a loop
         for j, sym in enumerate(message):
             # print(f'-\nStarting: low = {low}, high = {high}')
             # print(f'Encoding: c[{j}] = {sym}')
-            span = high - low - (self.num * self.delta - 1)
+            span = (
+                high - low + 1 - self.num * self.delta
+            )  # could become (L+1) bit value
             index, prob, cmf = self.index_of[sym]  # extract index, probability and cmf
             high = (
                 low
@@ -162,7 +170,7 @@ class ArithmeticCoder:
         three_quarters = half + quarter
 
         low = 0
-        high = half + (half - 1)
+        high = 2 * half - 1
         self.message_output = []
 
         value = 0  # currrent register contents
@@ -172,10 +180,25 @@ class ArithmeticCoder:
 
         for _ in range(mlen):
             # decode next symbol
-            span = high - low - (self.num * self.delta - 1)
-            q, r = divmod_abc(self.sum_freq, value - low + 1, span)  # = (q + r / span)
+            span = (
+                high - low + 1 - self.num * self.delta
+            )  # could become (L+1) bit value
+
+            # Our goal is to find the largest symbol index i such that
+            #     value - low >= floor(span * cmf[i] / sum_freq)
+            # <=> value - low + 1 - i * delta > span * cmf[i] / sum_freq
+            # <=> cmf[i] < (value - low + 1 - i * delta) * sum_freq / span
+            # <=> cmf[i] < ceil((value - low + 1 - i * delta) * sum_freq / span)
+            #
+            # We'll precompute d * sum_freq / span (where d = value - low + 1)
+            # and delta * sum_freq / span (when delta != 0). Then we can efficiently
+            # compute the RHS above as we increment i
+
+            d = value - low + 1  # could become (L+1) bit value
+            q, r = divmod_abc(d, self.sum_freq, span)
             # Let's convert this fraction into a representation of the form:
             #     (q - r / span) where 0 <= r < span
+            # so that q = ceil(d * self.sum_freq / span)
             if r != 0:
                 q += 1
                 r = span - r
@@ -186,11 +209,9 @@ class ArithmeticCoder:
                 else divmod_abc(self.sum_freq, self.delta, span)
             )  # = (qi + ri / span)
 
-            # print(low, high)
-            # index, new_low = 0, 0
-            for i in range(self.num):
+            for i, (_, _, cmf) in enumerate(self.symbol):
                 # print(self.symbol[i], q)
-                if self.symbol[i][2] < q:
+                if cmf < q:
                     index = i  # i could be the next symbol
                 else:
                     break
@@ -208,7 +229,7 @@ class ArithmeticCoder:
                 + (index + 1) * self.delta
                 - 1
             )
-            low = low + divmod_abc(span, cmf, self.sum_freq)[0] + index * self.delta
+            low += divmod_abc(span, cmf, self.sum_freq)[0] + index * self.delta
 
             # to debug:
             # print(sym, value, low, high)
