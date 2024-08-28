@@ -3,7 +3,7 @@ import math
 
 def divmod_abc(a, b, c):
     """
-    Given three unsigned integers a, b, c such that a, b amd 2*c - 1 fit in
+    Given three unsigned integers a, b, c such that a, b and 2*c - 1 fit in
     L-bit registers, compute:
 
         q = (a * b) // c and r = (a * b) % c
@@ -16,7 +16,7 @@ def divmod_abc(a, b, c):
         return divmod_abc(b, a, c)
 
     # Let k > 1 be an integer such that k * c - 1 doesn't overflow. We
-    # choose k = 2 which requires that 2 * c -1 is an L-bit value
+    # choose k = 2 which requires that 2 * c - 1 is an L-bit value
     k = 2
     qm, rm = divmod(a, c)
     q, r = 0, 0
@@ -60,6 +60,15 @@ def divmod_abc(a, b, c):
     return (q, r)
 
 
+def get_frequencies(text):
+    "Estimate frequency table from given text."
+    freqs = dict()
+    for c in text:
+        freqs[c] = freqs.get(c, 0) + 1
+
+    return freqs
+
+
 class ArithmeticCoder:
     def __init__(self, frequencies, register_size=16, pad=0):
         # assert pad >= 1
@@ -80,25 +89,21 @@ class ArithmeticCoder:
         assert cmf <= (1 << (self.ell - 1))
         self.sum_freq = cmf
 
-        # encoder specific
-        self.num_inversions = 0
-        self.code_output = []
-
-        # decoder specific
-        self.message_output = []
-
-    def bit_plus_inversions(self, bit):
-        "Helper function"
-        bitc = 1 - bit
-        # print('Output  : ', str(bit) + str(bitc) * self.num_inversions)
-        self.code_output.append(bit)
-        for _ in range(self.num_inversions):
-            self.code_output.append(bitc)
-
-        self.num_inversions = 0
-
     def encode(self, message):
         """Encode a message."""
+
+        num_inversions = 0
+        code_output = []
+
+        # local helper function
+        def bit_plus_inversions(bit):
+            nonlocal num_inversions
+            nonlocal code_output
+
+            code_output.append(bit)
+            code_output += num_inversions * [1 - bit]
+            num_inversions = 0
+
         half = 1 << (self.ell - 1)
         quarter = 1 << (self.ell - 2)
         three_quarters = half + quarter
@@ -106,12 +111,12 @@ class ArithmeticCoder:
         # low and hight are always L-bit values
         low = 0
         high = 2 * half - 1
-        self.code_output = []
+        code_output = []
 
         # process each symbol in a loop
         for j, sym in enumerate(message):
-            # print(f'-\nStarting: low = {low}, high = {high}')
-            # print(f'Encoding: c[{j}] = {sym}')
+            # print(f"\nStarting: [{low/full}, {(high+1)/full})" + alert[high < low])
+            # print(f"Received: symbol[{j}] = {sym}")
             span = (
                 high - low + 1 - self.num * self.delta
             )  # could become (L+1) bit value
@@ -127,15 +132,16 @@ class ArithmeticCoder:
 
             while True:
                 if high < half:
-                    self.bit_plus_inversions(0)
+                    bit_plus_inversions(0)
                 elif low >= half:
                     low -= half
                     high -= half
-                    self.bit_plus_inversions(1)
+                    bit_plus_inversions(1)
                 elif low >= quarter and high < three_quarters:
                     low -= quarter
                     high -= quarter
-                    self.num_inversions += 1
+                    num_inversions += 1
+                    # print(f" Shifted: [{low/full}, {(high+1)/full})")
                 else:
                     break
 
@@ -143,7 +149,8 @@ class ArithmeticCoder:
                 low = 2 * low
                 high = 2 * high + 1
 
-            # print(f'Expanded: low = {low}, high = {high}')
+                # print(f"Expanded: [{low/full}, {(high+1)/full})")
+            # print("".join(str(x) for x in code_output) + '#' * num_inversions)
 
         # At this point we have either
         #   low < quarter < half <= high        => contains [quarter, half]
@@ -151,7 +158,7 @@ class ArithmeticCoder:
 
         # # According to the paper we output two more bits to specify which of the two
         # # quarter width intervals would be contained in our final interval:
-        # self.num_inversions += 1
+        # num_inversions += 1
         # if low < quarter:
         #     self.bit_plus_inversions(0)
         # else:
@@ -159,9 +166,9 @@ class ArithmeticCoder:
 
         # But we can output only one more bit "1" to select the point at "half"
         # which is always contained in the final interval:
-        self.bit_plus_inversions(1)
+        bit_plus_inversions(1)
 
-        return self.code_output
+        return code_output
 
     def decode(self, codeword, mlen):
         """Decode a message."""
@@ -171,7 +178,7 @@ class ArithmeticCoder:
 
         low = 0
         high = 2 * half - 1
-        self.message_output = []
+        message_output = []
 
         value = 0  # currrent register contents
         codestream = iter(codeword)
@@ -179,6 +186,8 @@ class ArithmeticCoder:
             value = 2 * value + next(codestream, 0)
 
         for _ in range(mlen):
+            # print(f"\nStarting: [{low/full}, {(high+1)/full})" + alert[high < low] + f" | codeval = {value/full}")
+
             # decode next symbol
             span = (
                 high - low + 1 - self.num * self.delta
@@ -207,7 +216,7 @@ class ArithmeticCoder:
                 (0, 0)
                 if self.delta == 0
                 else divmod_abc(self.sum_freq, self.delta, span)
-            )  # = (qi + ri / span)
+            )
 
             for i, (_, _, cmf) in enumerate(self.symbol):
                 # print(self.symbol[i], q)
@@ -231,10 +240,10 @@ class ArithmeticCoder:
             )
             low += divmod_abc(span, cmf, self.sum_freq)[0] + index * self.delta
 
-            # to debug:
-            # print(sym, value, low, high)
+            # print(f"Decoded: symbol[{j}] = {sym}")
+            # print(f"       => [{low/full}, {(high+1)/full})")
 
-            self.message_output.append(sym)
+            message_output.append(sym)
             while True:
                 if high < half:
                     pass  # do nothing
@@ -246,33 +255,69 @@ class ArithmeticCoder:
                     value -= quarter
                     low -= quarter
                     high -= quarter
+                    # print(f" Shifted: [{low/full}, {(high+1)/full}) | codeval = {value/full}")
                 else:
                     break
 
+                # double the interval size
                 low = 2 * low
                 high = 2 * high + 1
                 value = 2 * value + next(codestream, 0)  # default to 0
+                # print(f"Expanded: [{low/full}, {(high+1)/full}) | codeval = {value/full}")
+            # print()
 
-        return "".join(self.message_output)
+        return "".join(message_output)
 
 
-# main: example usage
-frequencies = {"A": 126, "B": 167, "C": 116, "D": 88, "Y": 89, " ": 100}
-endec = ArithmeticCoder(frequencies, register_size=12)
+def test(message, frequencies=None):
+    if frequencies is None:
+        frequencies = get_frequencies(message)
 
-message = "ABBY CADABBY"
-encoded = endec.encode(message)
-decoded = endec.decode(encoded, len(message))
+    endec = ArithmeticCoder(frequencies, register_size=16)
+    encoded = endec.encode(message)
+    decoded = endec.decode(encoded, len(message))
 
-# encode and decode message
-encoded_string = "".join(str(bit) for bit in encoded)
-entropy = len(message) * math.log2(sum(frequencies.values())) - sum(
-    math.log2(frequencies[c]) for c in message
-)
+    # encode and decode message
+    encoded_string = "".join(str(bit) for bit in encoded)
+    entropy = len(message) * math.log2(sum(frequencies.values())) - sum(
+        math.log2(frequencies[c]) for c in message
+    )
 
-# print info
-print(f"Message string = {message}")
-print(f"Encoded string = {encoded_string}")
-print(f"Entropy of msg = {entropy:.2f} bits")
-print(f"Encoded length = {len(encoded)} bits")
-print(f"Decoded string = {decoded}")
+    # print info
+    maxlen = 128
+    print(f"Entropy of msg = {entropy:.2f} bits")
+    print(f"Encoded length = {len(encoded)} bits")
+
+    if len(encoded) < maxlen:
+        print(f'Message string = "{message}"')
+    else:
+        print(f'Message string = "{message[:maxlen]}..."')
+
+    if len(encoded_string) < maxlen:
+        print(f"Encoded string = {encoded_string}")
+    else:
+        print(f"Encoded string = {encoded_string[:maxlen]}...")
+
+    if len(decoded) < maxlen:
+        print(f'Decoded string = "{decoded}"')
+    else:
+        print(f'Decoded string = "{decoded[:maxlen]}..."')
+
+    # check if decoding was successful
+    assert message == decoded
+
+
+if __name__ == "__main__":
+    # main: example usage
+
+    # test 1
+    print("\nTest 1\n======")
+    message = "ABBY CADABBY"
+    frequencies = {"A": 126, "B": 167, "C": 116, "D": 88, "Y": 89, " ": 100}
+    test(message, frequencies)
+
+    # test2
+    print("\nTest 2\n======")
+    with open("arithmetic_coding.py") as f:
+        message = f.read()
+    test(message)
