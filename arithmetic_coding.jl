@@ -95,9 +95,6 @@ end
 function encode(endec::Endec, message::String)
     "Encode a message."
 
-    num_inversions = 0
-    code_output = []
-
     # local helper function
     function bit_plus_inversions(bit)
         append!(code_output, bit, fill(1 - bit, num_inversions))
@@ -107,6 +104,9 @@ function encode(endec::Endec, message::String)
     num = length(endec.symbol)
     sum_freq = sum(s[2] for s in endec.symbol)
 
+    code_output = Int[]
+    num_inversions = 0
+
     half = 1 << (endec.ell - 1)
     quarter = 1 << (endec.ell - 2)
     three_quarters = half + quarter
@@ -114,7 +114,6 @@ function encode(endec::Endec, message::String)
     # low and hight are always L-bit values
     low = 0
     high = 2 * half - 1
-    code_output = Int[]
 
     for (j, sym) in enumerate(message)
         span = high - low + 1 - num * endec.delta  # could become (L+1) bit value
@@ -168,13 +167,14 @@ function decode(endec::Endec, codeword::Vector{Int}, mlen::Int)
     num = length(endec.symbol)
     sum_freq = sum(s[2] for s in endec.symbol)
 
+    message_output = Char[]
+
     half = 1 << (endec.ell - 1)
     quarter = 1 << (endec.ell - 2)
     three_quarters = half + quarter
 
     low = 0
     high = 2 * half - 1
-    message_output = Char[]
 
     value = 0  # currrent register contents
     j = 1

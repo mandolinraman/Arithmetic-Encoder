@@ -92,9 +92,6 @@ class ArithmeticCoder:
     def encode(self, message):
         """Encode a message."""
 
-        num_inversions = 0
-        code_output = []
-
         # local helper function
         def bit_plus_inversions(bit):
             nonlocal num_inversions
@@ -104,14 +101,16 @@ class ArithmeticCoder:
             code_output += num_inversions * [1 - bit]
             num_inversions = 0
 
+        code_output = []
+        num_inversions = 0
+
         half = 1 << (self.ell - 1)
         quarter = 1 << (self.ell - 2)
         three_quarters = half + quarter
 
-        # low and hight are always L-bit values
+        # low and high are always L-bit values
         low = 0
         high = 2 * half - 1
-        code_output = []
 
         # process each symbol in a loop
         for j, sym in enumerate(message):
@@ -172,16 +171,18 @@ class ArithmeticCoder:
 
     def decode(self, codeword, mlen):
         """Decode a message."""
+
+        message_output = []
+
         half = 1 << (self.ell - 1)
         quarter = 1 << (self.ell - 2)
         three_quarters = half + quarter
 
         low = 0
         high = 2 * half - 1
-        message_output = []
-
-        value = 0  # currrent register contents
+        value = 0  # current register contents
         codestream = iter(codeword)
+
         for _ in range(self.ell):
             value = 2 * value + next(codestream, 0)
 
