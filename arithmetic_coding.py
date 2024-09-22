@@ -1,4 +1,4 @@
-import math
+import math, random
 
 
 def divmod_abc(a, b, c):
@@ -70,8 +70,10 @@ def get_frequencies(text):
 
 
 class ArithmeticCoder:
-    def __init__(self, frequencies, register_size=16, pad=0):
-        # assert pad >= 1
+    def __init__(self, frequencies, mode="dc", register_size=16, pad=0):
+        self.mode = mode.lower()  # "dc" for data compression, "sg" for source generation
+        assert self.mode in ["dc", "sg"]
+
         self.delta = pad  # pad size
         self.ell = register_size  # register size "L"
         self.num = len(frequencies)  # number of symbols
@@ -89,8 +91,8 @@ class ArithmeticCoder:
         assert cmf <= (1 << (self.ell - 1))
         self.sum_freq = cmf
 
-    def encode(self, message):
-        """Encode a message."""
+    def compress(self, message, length=float("inf")):
+        """Convert text to a bit sequence."""
 
         # local helper function
         def bit_plus_inversions(bit):
@@ -112,10 +114,12 @@ class ArithmeticCoder:
         low = 0
         high = 2 * half - 1
 
-        # process each symbol in a loop
-        for j, sym in enumerate(message):
+        n = 0  # keeps track of number of doubling operations
+        m = 0  # keeps track of number of symbols generated
+        while m < len(message) and n < length:
+            sym = message[m]
             # print(f"\nStarting: [{low/full}, {(high+1)/full})" + alert[high < low])
-            # print(f"Received: symbol[{j}] = {sym}")
+            # print(f"Received: symbol[{m}] = {sym}")
             span = (
                 high - low + 1 - self.num * self.delta
             )  # could become (L+1) bit value
@@ -129,7 +133,10 @@ class ArithmeticCoder:
             low = low + divmod_abc(span, cmf, self.sum_freq)[0] + index * self.delta
             # print(f'       => low = {low}, high = {high}')
 
-            while True:
+            m += 1  # increment symbol count
+
+            # check if we can double
+            while n < length:
                 if high < half:
                     bit_plus_inversions(0)
                 elif low >= half:
@@ -147,6 +154,7 @@ class ArithmeticCoder:
                 # double the interval size
                 low = 2 * low
                 high = 2 * high + 1
+                n += 1  # count number of doublings
 
                 # print(f"Expanded: [{low/full}, {(high+1)/full})")
             # print("".join(str(x) for x in code_output) + '#' * num_inversions)
@@ -165,12 +173,23 @@ class ArithmeticCoder:
 
         # But we can output only one more bit "1" to select the point at "half"
         # which is always contained in the final interval:
-        bit_plus_inversions(1)
+
+        # needed only for data compression mode:
+        if self.mode == "dc":
+            bit_plus_inversions(1)
+        else:
+            # If num_inversions == 0 (which is rare) => low == 0
+            # otherwise low is most likely nonzero. However low
+            # could still be zero (which is also a rare event).
+            # The following check should NOT be "if low > 0"
+            if num_inversions > 0:
+                num_inversions -= 1
+                bit_plus_inversions(1)
 
         return code_output
 
-    def decode(self, codeword, mlen):
-        """Decode a message."""
+    def expand(self, codeword, length=float("inf")):
+        """Convert a bit sequence to text."""
 
         message_output = []
 
@@ -182,11 +201,14 @@ class ArithmeticCoder:
         high = 2 * half - 1
         value = 0  # current register contents
         codestream = iter(codeword)
+        tail_bit = 0
 
         for _ in range(self.ell):
-            value = 2 * value + next(codestream, 0)
+            value = 2 * value + next(codestream, tail_bit)
 
-        for _ in range(mlen):
+        n = 0  # keeps track of number of doubling operations
+        m = 0  # keeps track of number of symbols generated
+        while m < length and n < len(codeword):
             # print(f"\nStarting: [{low/full}, {(high+1)/full})" + alert[high < low] + f" | codeval = {value/full}")
 
             # decode next symbol
@@ -241,11 +263,14 @@ class ArithmeticCoder:
             )
             low += divmod_abc(span, cmf, self.sum_freq)[0] + index * self.delta
 
-            # print(f"Decoded: symbol[{j}] = {sym}")
+            # print(f"Decoded: symbol[{m}] = {sym}")
             # print(f"       => [{low/full}, {(high+1)/full})")
 
             message_output.append(sym)
-            while True:
+            m += 1  # increment symbol count
+
+            # check if we can double
+            while n < len(codeword):
                 if high < half:
                     pass  # do nothing
                 elif low >= half:
@@ -263,20 +288,37 @@ class ArithmeticCoder:
                 # double the interval size
                 low = 2 * low
                 high = 2 * high + 1
-                value = 2 * value + next(codestream, 0)  # default to 0
+                value = 2 * value + next(codestream, tail_bit)
+                n += 1  # count number of doublings
                 # print(f"Expanded: [{low/full}, {(high+1)/full}) | codeval = {value/full}")
             # print()
 
         return "".join(message_output)
+
+    def encode(self, seq):
+        if self.mode == "dc":
+            # seq is text
+            return self.compress(seq)
+        else:
+            # seq is an bit sequence
+            return self.expand(seq)
+
+    def decode(self, seq, length):
+        if self.mode == "dc":
+            # seq is an bit sequence
+            return self.expand(seq, length)
+        else:
+            # seq is text
+            return self.compress(seq, length)
 
 
 def test(message, frequencies=None):
     if frequencies is None:
         frequencies = get_frequencies(message)
 
-    endec = ArithmeticCoder(frequencies, register_size=16)
-    encoded = endec.encode(message)
-    decoded = endec.decode(encoded, len(message))
+    endec = ArithmeticCoder(frequencies, mode="dc", register_size=16)
+    encoded = endec.compress(message)
+    decoded = endec.expand(encoded, len(message))
 
     # encode and decode message
     encoded_string = "".join(str(bit) for bit in encoded)
@@ -322,3 +364,18 @@ if __name__ == "__main__":
     with open("arithmetic_coding.py") as f:
         message = f.read()
     test(message)
+
+    print("\nTest 3\n======")
+    endec = ArithmeticCoder(frequencies, mode="sg", register_size=16)
+
+    for trial in range(10000):
+        print(f"\nTrial: {trial}")
+        x = [random.randint(0, 1) for _ in range(30)]
+        print("".join(str(i) for i in x))
+
+        y = endec.encode(x)
+        print(y)
+
+        xh = endec.decode(y, len(x))
+        print("".join(str(i) for i in xh))
+        assert x == xh
