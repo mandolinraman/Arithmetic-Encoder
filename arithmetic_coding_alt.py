@@ -1,5 +1,3 @@
-import math, random
-
 ALERT = {False: "", True: " ####"}
 
 
@@ -62,18 +60,11 @@ def divmod_abc(a, b, c):
     return (q, r)
 
 
-def get_frequencies(text):
-    "Estimate frequency table from given text."
-    freqs = dict()
-    for c in text:
-        freqs[c] = freqs.get(c, 0) + 1
-
-    return freqs
-
-
 class ArithmeticCoder:
     def __init__(self, frequencies, mode="dc", register_size=16, pad=0):
-        self.mode = mode.lower()  # "dc" for data compression, "sg" for source generation
+        self.mode = (
+            mode.lower()
+        )  # "dc" for data compression, "sg" for source generation
         assert self.mode in ["dc", "sg"]
 
         self.delta = pad  # pad size
@@ -280,71 +271,3 @@ class ArithmeticCoder:
         else:
             # seq is text
             return self.compress(seq, length)
-
-
-def test(message, frequencies=None):
-    if frequencies is None:
-        frequencies = get_frequencies(message)
-
-    endec = ArithmeticCoder(frequencies, mode="dc", register_size=16)
-    encoded = endec.encode(message)
-    decoded = endec.decode(encoded, len(message))
-
-    # encode and decode message
-    encoded_string = "".join(str(bit) for bit in encoded)
-    entropy = len(message) * math.log2(sum(frequencies.values())) - sum(
-        math.log2(frequencies[c]) for c in message
-    )
-
-    # print info
-    maxlen = 128
-    print(f"Entropy of msg = {entropy:.2f} bits")
-    print(f"Encoded length = {len(encoded)} bits")
-
-    if len(encoded) < maxlen:
-        print(f'Message string = "{message}"')
-    else:
-        print(f'Message string = "{message[:maxlen]}..."')
-
-    if len(encoded_string) < maxlen:
-        print(f"Encoded string = {encoded_string}")
-    else:
-        print(f"Encoded string = {encoded_string[:maxlen]}...")
-
-    if len(decoded) < maxlen:
-        print(f'Decoded string = "{decoded}"')
-    else:
-        print(f'Decoded string = "{decoded[:maxlen]}..."')
-
-    # check if decoding was successful
-    assert message == decoded
-
-
-if __name__ == "__main__":
-    # main: example usage
-
-    # test 1
-    print("\nTest 1\n======")
-    message = "ABBY CADABBY"
-    frequencies = {"A": 126, "B": 167, "C": 116, "D": 88, "Y": 89, " ": 100}
-    test(message, frequencies)
-
-    # test2
-    print("\nTest 2\n======")
-    with open("arithmetic_coding_alt.py") as f:
-        message = f.read()
-    test(message)
-
-    print("\nTest 3\n======")
-    endec = ArithmeticCoder(frequencies, mode="sg", register_size=16)
-
-    for trial in range(10000):
-        print(f"\nTrial: {trial}")
-        x = [random.randint(0, 1) for _ in range(30)]
-        y = endec.encode(x)
-        xh = endec.decode(y, len(x))
-
-        print("".join(str(i) for i in x))
-        print(y)
-        print("".join(str(i) for i in xh))
-        assert x == xh
