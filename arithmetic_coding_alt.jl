@@ -30,9 +30,9 @@ function divmod_abc(a, b, c)
 
     # We want to maintain the invariant:
     #     a * b / c = (q + r / c) + (qm + rm / c) * m
-    #     where 0 <= r, rm < c
+    #     where 0 ≤ r, rm < c
     while m > 0
-        # Let m = k * t + s with 0 <= s < k:
+        # Let m = k * t + s with 0 ≤ s < k:
         (t, s) = divrem(m, k)
 
         # Then,
@@ -40,7 +40,7 @@ function divmod_abc(a, b, c)
         #     = (q + qm * s) + (r + rm * s) / c + (qm * k + rm * k / c) * t
         if s > 0
             r += rm * s  # won't overflow since r + rm * s < c * k
-            q += qm * s + r ÷ c  # won't overflow because q <= q_final
+            q += qm * s + r ÷ c  # won't overflow because q ≤ q_final
             r = r % c
         end
 
@@ -49,7 +49,7 @@ function divmod_abc(a, b, c)
         if t > 0
             # simplify the second term
             rm *= k  # won't overflow since rm * k < c * k
-            qm = k * qm + rm ÷ c  # won't overflow because qm * t <= q_final
+            qm = k * qm + rm ÷ c  # won't overflow because qm * t ≤ q_final
             rm = rm % c  # won't overflow
         end
 
@@ -82,7 +82,7 @@ function make_endec(freqs, mode = "dc"; register_size = 16, pad = 0)
         cmf += prob
     end
 
-    @assert cmf <= (1 << (register_size - 1))
+    @assert cmf ≤ (1 << (register_size - 1))
 
     return Endec(mode, register_size, pad, index_of, symbol)
 end
@@ -129,7 +129,7 @@ function compress(endec::Endec, message::String, len::Int = typemax(Int))
 
         # check if we can double
         while mod(high - low, full) < half && n < len
-            if low >= half
+            if low ≥ half
                 push!(code_output, 1)
             else
                 push!(code_output, 0)
@@ -146,7 +146,7 @@ function compress(endec::Endec, message::String, len::Int = typemax(Int))
     if endec.mode == "dc"
         # add one more bit to pick a point in the final interval
         push!(code_output, 1)
-        if low >= half
+        if low ≥ half
             increment()
         end
     end
@@ -171,7 +171,7 @@ function expand(endec::Endec, codeword::Vector{Int}, len::Int = typemax(Int))
     tail_bit = Int(endec.mode == "sg")  # = 1 for source generation
 
     for n in 1:endec.ell
-        value = 2 * value + (n <= length(codeword) ? codeword[n] : tail_bit)
+        value = 2 * value + (n ≤ length(codeword) ? codeword[n] : tail_bit)
     end
 
     n = 0  # keeps track of number of doubling operations
@@ -181,7 +181,7 @@ function expand(endec::Endec, codeword::Vector{Int}, len::Int = typemax(Int))
         span = mod(high - low, full) + 1 - num * endec.delta  # could become (L+1) bit value
 
         # Our goal is to find the largest symbol index i such that
-        #     value - low >= floor(span * cmf[i] / sum_freq)
+        #     value - low ≥ floor(span * cmf[i] / sum_freq)
         # <=> value - low + 1 - i * delta > span * cmf[i] / sum_freq
         # <=> cmf[i] < (value - low + 1 - i * delta) * sum_freq / span
         # <=> cmf[i] < ceil((value - low + 1 - i * delta) * sum_freq / span)
@@ -193,7 +193,7 @@ function expand(endec::Endec, codeword::Vector{Int}, len::Int = typemax(Int))
         d = mod(value - low, full) + 1  # could become (L+1) bit value
         q, r = divmod_abc(d, sum_freq, span)
         # Let's convert this fraction into a representation of the form:
-        #     (q - r / span) where 0 <= r < span
+        #     (q - r / span) where 0 ≤ r < span
         # so that q = ceil(d * sum_freq / span)
         if r != 0
             q += 1
@@ -230,7 +230,7 @@ function expand(endec::Endec, codeword::Vector{Int}, len::Int = typemax(Int))
             high = mod(2 * high + 1, full)
             n += 1  # count number of doublings
             nx = n + endec.ell  # position of next bit
-            value = mod(2 * value + (nx <= length(codeword) ? codeword[nx] : tail_bit), full)
+            value = mod(2 * value + (nx ≤ length(codeword) ? codeword[nx] : tail_bit), full)
         end
     end
     return join(message_output)
