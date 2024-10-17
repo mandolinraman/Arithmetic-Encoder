@@ -221,7 +221,7 @@ function expand(endec::Endec, codeword::Vector{Int}, len::Int = typemax(Int))
         high = mod(low + divmod_abc(span, cmf + prob, sum_freq)[1] + index * endec.delta - 1, full)
         low = mod(low + divmod_abc(span, cmf, sum_freq)[1] + (index - 1) * endec.delta, full)
 
-        append!(message_output, sym)
+        push!(message_output, sym)
         m += 1 # increment symbol count
 
         # check if we can double
